@@ -23,7 +23,7 @@ __all__ = ["BaseMakeBias"]
 import yaml
 import abc
 import json
-import os
+import asyncio
 
 from lsst.ts import salobj
 
@@ -228,11 +228,14 @@ class BaseMakeBias(salobj.BaseScript, metaclass=abc.ABCMeta):
             cmd = (f"butler certify-calibrations {REPO} {BIAS_DIR} {CAL_DIR} "
                    "--begin-date 1980-01-01 --end-date 2050-01-01 bias")
             self.log.info(cmd)
-            try:
-                os.system(cmd)
-                self.log.info("Finished running command for certifying bias.")
-            except RuntimeError:
-                self.log.info("Error running command for certifying bias.")
+
+            process = await asyncio.create_subprocess_shell(cmd)
+            stdout, stderr = await process.communicate()
+            self.log.debug(f"Process returned: {process.returncode}")
+            if process.returncode != 0:
+                self.log.debug(stdout)
+                self.log.error(stderr)
+                raise RuntimeError("Error running command for certifying bias.")
 
     async def run(self):
         """"""
