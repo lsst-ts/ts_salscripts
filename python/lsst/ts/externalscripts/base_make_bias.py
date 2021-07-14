@@ -106,7 +106,7 @@ class BaseMakeBias(salobj.BaseScript, metaclass=abc.ABCMeta):
 
             oods_timeout:
                 type: integer
-                default 600
+                default: 600
                 descriptor: Timeout value, in seconds, for OODS.
 
         additionalProperties: false

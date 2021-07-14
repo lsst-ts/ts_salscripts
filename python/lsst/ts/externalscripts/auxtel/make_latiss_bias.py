@@ -43,12 +43,12 @@ class MakeLatissBias(BaseMakeBias):
 
     @property
     def camera(self):
-        return "LATISS"
+        return self._latiss
 
     @property
     def instrument_name(self):
         """String with instrument name for pipeline task"""
-        return self._instrument_name
+        return "LATISS"
 
     @property
     def image_in_oods(self):
