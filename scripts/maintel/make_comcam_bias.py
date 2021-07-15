@@ -1,6 +1,7 @@
-# This file is part of ts_externalcripts.
+#!/usr/bin/env python
+# This file is part of ts_externalscripts
 #
-# Developed for the Rubin Observatory Telescope and Site System.
+# Developed for the LSST Telescope and Site Systems.
 # This product includes software developed by the LSST Project
 # (https://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
@@ -17,10 +18,9 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from .calsys_take_narrowband_data import *
-from .calsys_takedata import *
-from .latiss_acquire_and_take_sequence import *
-from .latiss_cwfs_align import *
-from .make_latiss_bias import *
+import asyncio
+
+from lsst.ts.externalscripts.maintel import MakeComCamBias
+
+asyncio.run(MakeComCamBias.amain())
