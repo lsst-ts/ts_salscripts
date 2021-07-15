@@ -196,7 +196,7 @@ class BaseMakeBias(salobj.BaseScript, metaclass=abc.ABCMeta):
         self.log.debug('Received acknowledgement of ocps command')
 
         ack.print_vars()
-        job_id = json.loads(ack.result)["job_id"]
+        job_id_bias = json.loads(ack.result)["job_id"]
 
         # Wait for the command completion acknowledgement.
         ack = await self.ocps.cmd_execute.next_ackcmd(ack)
@@ -209,21 +209,61 @@ class BaseMakeBias(salobj.BaseScript, metaclass=abc.ABCMeta):
         # (that returns the, job id) but might as well wait for the second.
         while True:
             msg = await self.ocps.evt_job_result.next(flush=False, timeout=self.config.oods_timeout)
-            response = json.loads(msg.result)
-            if response["jobId"] == job_id:
+            response_bias = json.loads(msg.result)
+            if response_bias["jobId"] == job_id_bias:
                 break
 
-        self.log.info(f"Final status: {response}")
+        self.log.info(f"Final status from bias creation: {response_bias}")
 
-        # Certify the bias, if the job completed successfully
-        if not response['phase'] == 'completed':
-            raise RuntimeError(f"Bias creation not completed successfully: {response['phase']}")
+        # Verify the bias, if the job completed successfully
+        if not response_bias['phase'] == 'completed':
+            raise RuntimeError(f"Bias creation not completed successfully: {response_bias['phase']}")
         else:
+            # Verify master bias
+            ack = await self.ocps.cmd_execute.set_start(
+                wait_done=False, pipeline="${CP_VERIFY_DIR}/pipelines/VerifyBias.yaml", version="",
+                config=f"-j 8 -i {self.config.input_collections_verify} -i u/ocps/{job_id_bias} "
+                       "--register-dataset-types -c verifyBiasApply:doDefect=False ",
+                data_query=f"instrument='{self.instrument_name}' AND"
+                           f" detector IN {self.config.detectors} AND exposure IN {exposures}"
+            )
+            if ack.ack != salobj.SalRetCode.CMD_ACK:
+                ack.print_vars()
+
+            # Wait for the in-progress acknowledgement with the job identifier.
+            ack = await self.ocps.cmd_execute.next_ackcmd(ack, wait_done=False)
+            self.log.debug('Received acknowledgement of ocps command: verify bias')
+
+            ack.print_vars()
+            job_id_verify = json.loads(ack.result)["job_id"]
+
+            # Wait for the command completion acknowledgement.
+            ack = await self.ocps.cmd_execute.next_ackcmd(ack)
+            self.log.debug('Received command completion acknowledgement from ocps')
+            if ack.ack != salobj.SalRetCode.CMD_COMPLETE:
+                ack.print_vars()
+            # Wait for the job result message that matches the job id we're
+            # interested in ignoring any others (from other remotes).
+            # This obviously needs to follow the first acknowledgement
+            # (that returns the, job id) but might as well wait for the second.
+            while True:
+                msg = await self.ocps.evt_job_result.next(flush=False, timeout=self.config.oods_timeout)
+                response_verify = json.loads(msg.result)
+                if response_verify["jobId"] == job_id_verify:
+                    break
+
+            self.log.info(f"Final status from bias verification: {response_verify}")
+
+        # Certify the bias
+        if not response_verify['phase'] == 'completed':
+            raise RuntimeError((f"Bias verification not completed successfully: {response_verify['phase']}"))
+        else:
+            # Certification
             self.log.info("Certifying bias: ")
             # certify the bias
             REPO = self.config.repo
             # This is the output collection where the OCPS puts the biases
-            BIAS_DIR = f"u/ocps/{job_id}"
+            BIAS_DIR = f"u/ocps/{job_id_bias}"
             CAL_DIR = self.config.calib_dir
             cmd = (f"butler certify-calibrations {REPO} {BIAS_DIR} {CAL_DIR} "
                    "--begin-date 1980-01-01 --end-date 2050-01-01 bias")
